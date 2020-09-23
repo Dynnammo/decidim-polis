@@ -1,4 +1,4 @@
-name: Ruby
+name: Tests
 
 on:
   push:
@@ -11,24 +11,35 @@ on:
       - "*-stable"
 
 jobs:
-  test:
+  build:
 
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:11.6-alpine
+        ports:
+          - 5432:5432
 
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@ec106b438a1ff6ff109590de34ddc62c540232e0
+      - name: Set up Ruby 2.6
+        uses: ruby/setup-ruby@v1.45.0
         with:
-          ruby-version: 2.6
-      - name: Install dependencies
-        run: bundle install
-      - name: Run tests
-        run: bundle exec rake spec
-      - name: RuboCop Linter Action
-        uses: andrewmcodes/rubocop-linter-action@v3.3.0
+          ruby-version: 2.6.x
+      - name: Setup cache key and directory for gems cache
+        uses: actions/cache@v1
         with:
-          action_config_path: .github/config/rubocop_linter_action.yml
-          exit_on_failure: true
-      - name: Erb action
-        uses: revans/erb-action@v0.0.4
+          path: vendor/bundle
+          key: ${{ runner.os }}-gem-use-ruby-${{ hashFiles('**/Gemfile.lock') }}
+      - name: Install dependecies
+        run: |
+          gem install bundler -v 2.0.2
+          bundle config path vendor/bundle
+          bundle install --jobs 4 --retry 3
+      - name: Build and test
+        env:
+          RAILS_ENV: test
+          DATABASE_USERNAME: postgres
+        run: |
+          bundle exec rake test_app
+          bundle exec rspec
